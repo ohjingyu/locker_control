@@ -1,0 +1,19 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "빌드 (exe 만들기)",
+      "type": "shell",
+      "command": "python -m PyInstaller --onefile --windowed locker_control.py",
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "실행",
+      "type": "shell",
+      "command": "python locker_control.py",
+      "group": "test",
+      "problemMatcher": []
+    }
+  ]
+}

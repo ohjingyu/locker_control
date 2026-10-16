@@ -83,7 +83,7 @@ class App(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("사물함 보드 임시 제어 프로그램")
-        self.geometry("900x720")
+        self.geometry("900x760")
         self.ser = None
         self.q = queue.Queue()
         self.btns = {}
@@ -113,7 +113,7 @@ class App(tk.Tk):
         self.board = tk.Spinbox(ctl, from_=1, to=99, width=5)
         self.board.grid(row=0, column=1)
         ttk.Label(ctl, text="칸 번호").grid(row=0, column=2, padx=(12, 4))
-        self.ch = tk.Spinbox(ctl, from_=1, to=24, width=5)
+        self.ch = tk.Spinbox(ctl, from_=1, to=50, width=5)
         self.ch.grid(row=0, column=3)
         for i, (t, f) in enumerate([
             ("이 칸 열기", lambda: self.send(open_one(self.b(), self.c()))),
@@ -127,11 +127,11 @@ class App(tk.Tk):
         self.multi.grid(row=1, column=3, columnspan=2)
         ttk.Button(ctl, text="여러 칸 열기", command=self.do_multi).grid(row=1, column=5)
 
-        grid = ttk.LabelFrame(self, text="3. 칸 버튼 (누르면 열림 / 전체 상태조회 후 색: 초록=닫힘, 주황=열림)")
+        grid = ttk.LabelFrame(self, text="3. 칸 버튼 1~50 (위에 입력한 보드 번호로 열림 / 전체 상태조회 후 1~24칸 색: 초록=닫힘, 주황=열림)")
         grid.pack(fill="x", padx=8, pady=4)
-        for n in range(1, 25):
-            b = tk.Button(grid, text=str(n), width=6, command=lambda n=n: self.send(open_one(self.b(), n)))
-            b.grid(row=(n - 1) // 8, column=(n - 1) % 8, padx=3, pady=3)
+        for n in range(1, 51):
+            b = tk.Button(grid, text=str(n), width=5, command=lambda n=n: self.send(open_one(self.b(), n)))
+            b.grid(row=(n - 1) // 10, column=(n - 1) % 10, padx=3, pady=3)
             self.btns[n] = b
         self.default_bg = self.btns[1].cget("bg")
 
