@@ -56,6 +56,11 @@ def closed_channels(s1, s2, s3):
     return [i * 8 + b + 1 for i, s in enumerate((s3, s2, s1)) for b in range(8) if s >> b & 1]
 
 
+def seq_jobs(b_from, b_to, per):
+    """순차 열기 순서: 보드 시작~끝 번호마다 1~per번 칸"""
+    return [(b, c) for b in range(b_from, b_to + 1) for c in range(1, per + 1)]
+
+
 def describe(d):
     """수신 데이터를 사람이 읽을 문장으로 바꾼다."""
     if len(d) not in (5, 7) or bcc(d[:-1]) != d[-1]:
@@ -76,6 +81,7 @@ assert query_one(1, 1) == bytes.fromhex("80 01 01 33 B3")
 assert query_all(1) == bytes.fromhex("80 01 00 33 B2")
 assert open_multi(1, [2, 10, 18]) == bytes.fromhex("90 01 02 02 02 93")
 assert closed_channels(1, 1, 1) == [1, 9, 17]
+assert seq_jobs(1, 2, 2) == [(1, 1), (1, 2), (2, 1), (2, 2)] and seq_jobs(3, 2, 5) == []
 
 
 # ---------- 화면 ----------
@@ -117,7 +123,7 @@ class App(tk.Tk):
         self.ch.grid(row=0, column=3)
         for i, (t, f) in enumerate([
             ("이 칸 열기", lambda: self.send(open_one(self.b(), self.c()))),
-            ("전체 열기", lambda: self.open_all_delayed()),
+            ("전체 열기", lambda: self.send(open_all(self.b()))),
             ("이 칸 상태조회", lambda: self.send(query_one(self.b(), self.c()))),
             ("전체 상태조회", lambda: self.send(query_all(self.b()))),
         ]):
@@ -126,11 +132,18 @@ class App(tk.Tk):
         self.multi = ttk.Entry(ctl, width=20)
         self.multi.grid(row=1, column=3, columnspan=2)
         ttk.Button(ctl, text="여러 칸 열기", command=self.do_multi).grid(row=1, column=5)
-        ttk.Label(ctl, text="전체 열기 간격(ms)").grid(row=1, column=6, padx=(12, 4))
-        self.gap = tk.Spinbox(ctl, from_=0, to=5000, increment=100, width=6)
-        self.gap.delete(0, "end")
-        self.gap.insert(0, "300")
-        self.gap.grid(row=1, column=7)
+        seq = ttk.Frame(ctl)
+        seq.grid(row=2, column=0, columnspan=8, sticky="w", padx=4, pady=4)
+        ttk.Label(seq, text="순차 열기 - 보드").pack(side="left")
+        self.b_from = self.spin(seq, 1, 99, 1)
+        ttk.Label(seq, text="~").pack(side="left")
+        self.b_to = self.spin(seq, 1, 99, 1)
+        ttk.Label(seq, text="번  보드당").pack(side="left")
+        self.per = self.spin(seq, 1, 50, 50)
+        ttk.Label(seq, text="칸  간격").pack(side="left")
+        self.gap = self.spin(seq, 0, 5000, 300, 6)
+        ttk.Label(seq, text="ms").pack(side="left")
+        ttk.Button(seq, text="순차 열기", command=self.open_seq).pack(side="left", padx=8)
         self.opening = False
 
         grid = ttk.LabelFrame(self, text="3. 칸 버튼 1~50 (위에 입력한 보드 번호로 열림 / 전체 상태조회 후 1~24칸 색: 초록=닫힘, 주황=열림)")
@@ -244,24 +257,37 @@ class App(tk.Tk):
             return messagebox.showerror("전송 실패", str(e))
         self.add("tx", f"TX {data.hex(' ').upper()}")
 
-    def open_all_delayed(self, n=1):
-        """1~50번 칸을 입력한 간격(ms)을 두고 한 칸씩 연다."""
-        if n == 1:
-            if self.opening:
-                return
-            if not self.ser:
-                return messagebox.showwarning("알림", "먼저 포트를 연결해 주세요.")
-            try:
-                self.delay = max(0, int(self.gap.get()))
-            except ValueError:
-                return messagebox.showwarning("알림", "간격은 숫자(ms)로 적어 주세요.")
-            self.opening = True
-            self.add("info", f"전체 열기 시작 (1~50번, 간격 {self.delay}ms)")
-        if n > 50 or not self.ser:
+    def spin(self, parent, lo, hi, val, width=4):
+        s = tk.Spinbox(parent, from_=lo, to=hi, width=width)
+        s.delete(0, "end")
+        s.insert(0, str(val))
+        s.pack(side="left", padx=2)
+        return s
+
+    def open_seq(self):
+        """보드 시작~끝 번호의 1~N번 칸을 입력한 간격(ms)으로 한 칸씩 연다."""
+        if self.opening:
+            return
+        if not self.ser:
+            return messagebox.showwarning("알림", "먼저 포트를 연결해 주세요.")
+        try:
+            self.delay = max(0, int(self.gap.get()))
+            self.jobs = seq_jobs(int(self.b_from.get()), int(self.b_to.get()), int(self.per.get()))
+        except ValueError:
+            return messagebox.showwarning("알림", "숫자로 적어 주세요.")
+        if not self.jobs:
+            return messagebox.showwarning("알림", "시작 보드 번호가 끝 번호보다 클 수 없습니다.")
+        self.opening = True
+        self.add("info", f"순차 열기 시작 ({len(self.jobs)}칸, 간격 {self.delay}ms)")
+        self.step()
+
+    def step(self):
+        if not self.jobs or not self.ser:
             self.opening = False
-            return self.add("info", "전체 열기 끝")
-        self.send(open_one(self.b(), n))
-        self.after(self.delay, self.open_all_delayed, n + 1)
+            return self.add("info", "순차 열기 끝")
+        board, ch = self.jobs.pop(0)
+        self.send(open_one(board, ch))
+        self.after(self.delay, self.step)
 
     def do_multi(self):
         try:
