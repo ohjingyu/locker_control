@@ -117,7 +117,7 @@ class App(tk.Tk):
         self.ch.grid(row=0, column=3)
         for i, (t, f) in enumerate([
             ("이 칸 열기", lambda: self.send(open_one(self.b(), self.c()))),
-            ("전체 열기", lambda: self.send(open_all(self.b()))),
+            ("전체 열기", lambda: self.open_all_delayed()),
             ("이 칸 상태조회", lambda: self.send(query_one(self.b(), self.c()))),
             ("전체 상태조회", lambda: self.send(query_all(self.b()))),
         ]):
@@ -126,6 +126,12 @@ class App(tk.Tk):
         self.multi = ttk.Entry(ctl, width=20)
         self.multi.grid(row=1, column=3, columnspan=2)
         ttk.Button(ctl, text="여러 칸 열기", command=self.do_multi).grid(row=1, column=5)
+        ttk.Label(ctl, text="전체 열기 간격(ms)").grid(row=1, column=6, padx=(12, 4))
+        self.gap = tk.Spinbox(ctl, from_=0, to=5000, increment=100, width=6)
+        self.gap.delete(0, "end")
+        self.gap.insert(0, "300")
+        self.gap.grid(row=1, column=7)
+        self.opening = False
 
         grid = ttk.LabelFrame(self, text="3. 칸 버튼 1~50 (위에 입력한 보드 번호로 열림 / 전체 상태조회 후 1~24칸 색: 초록=닫힘, 주황=열림)")
         grid.pack(fill="x", padx=8, pady=4)
@@ -237,6 +243,25 @@ class App(tk.Tk):
         except serial.SerialException as e:
             return messagebox.showerror("전송 실패", str(e))
         self.add("tx", f"TX {data.hex(' ').upper()}")
+
+    def open_all_delayed(self, n=1):
+        """1~50번 칸을 입력한 간격(ms)을 두고 한 칸씩 연다."""
+        if n == 1:
+            if self.opening:
+                return
+            if not self.ser:
+                return messagebox.showwarning("알림", "먼저 포트를 연결해 주세요.")
+            try:
+                self.delay = max(0, int(self.gap.get()))
+            except ValueError:
+                return messagebox.showwarning("알림", "간격은 숫자(ms)로 적어 주세요.")
+            self.opening = True
+            self.add("info", f"전체 열기 시작 (1~50번, 간격 {self.delay}ms)")
+        if n > 50 or not self.ser:
+            self.opening = False
+            return self.add("info", "전체 열기 끝")
+        self.send(open_one(self.b(), n))
+        self.after(self.delay, self.open_all_delayed, n + 1)
 
     def do_multi(self):
         try:
